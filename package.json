@@ -16,6 +16,7 @@
     "test:content": "tsx scripts/test-learn-content.ts",
     "test:tiers": "tsx scripts/test-tiers.ts",
     "test:credits": "tsx scripts/test-credit-ledger.ts",
+    "test:credits:db": "tsx scripts/test-credit-integration.ts",
     "benchmark:ai": "tsx scripts/ai-output-benchmark.ts",
     "benchmark:ai:validate": "tsx scripts/ai-output-benchmark.ts --validate-inputs",
     "test:ai-benchmark": "tsx scripts/test-ai-benchmark.ts",

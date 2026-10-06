@@ -23,6 +23,7 @@ import {
   DOCUMENT_DEFINITIONS,
   DOCUMENT_GENERATION_ORDER,
   DEFAULT_CORE_DOCS_BY_TIER,
+  calcDocumentCredits,
   getDefaultModelClass,
   legacyTierSlugToUserTier,
 } from "@/lib/config/documents";
@@ -32,7 +33,13 @@ import {
   resolveModelsForClass,
   isModelConfigured,
 } from "@/lib/ai-gateway/model-router";
-import { getTierConfig, validateModelClassForTier, type ModelClassId } from "@/lib/config/tiers";
+import {
+  getTierConfig,
+  MODEL_CLASS,
+  validateModelClassForTier,
+  type ModelClassId,
+  type TierId,
+} from "@/lib/config/tiers";
 
 export type { DocumentFileKey as FileKey } from "@/lib/config/documents";
 export type GenerationStatus = "pending" | "generating" | "done" | "error";
@@ -140,17 +147,64 @@ async function* streamCompleteFile(
   return sanitizeGeneratedContent(content);
 }
 
+function planGeneration(input: GenerationInput) {
+  const userTier = legacyTierSlugToUserTier(input.tier);
+  const requestedDocs: DocumentFileKey[] =
+    input.selectedDocs ?? DEFAULT_CORE_DOCS_BY_TIER[userTier];
+  const enforcement = enforceTier(requestedDocs, input.modelId, input.tier);
+  const tierId: TierId =
+    enforcement.userTier === "prime" ? "PRIME" : enforcement.userTier === "core" ? "CORE" : "BASE";
+  const docsToGenerate = DOCUMENT_GENERATION_ORDER.filter((k) =>
+    enforcement.sanitizedDocs.includes(k),
+  );
+
+  function resolveDocModelClass(fileKey: DocumentFileKey): ModelClassId {
+    const slug =
+      input.perDocumentModelClass?.[fileKey] ?? getDefaultModelClass(fileKey, enforcement.userTier);
+    const classId = modelClassSlugToId(slug);
+    if (!validateModelClassForTier(tierId, classId)) {
+      return "HEMAT";
+    }
+    return classId;
+  }
+
+  return { userTier, enforcement, tierId, docsToGenerate, resolveDocModelClass };
+}
+
+const MODEL_CLASS_ID_TO_SLUG: Record<ModelClassId, "hemat" | "menengah" | "flagship" | "ultra"> = {
+  [MODEL_CLASS.HEMAT]: "hemat",
+  [MODEL_CLASS.MENENGAH]: "menengah",
+  [MODEL_CLASS.FLAGSHIP]: "flagship",
+  [MODEL_CLASS.ULTRA]: "ultra",
+};
+
+/**
+ * Credits to hold before generating, computed on the server from the same
+ * document and model-class resolution the orchestrator uses. Never trust a
+ * client-supplied estimate.
+ */
+export function estimateGenerationCredits(input: GenerationInput): number {
+  const plan = planGeneration(input);
+  const total = plan.docsToGenerate.reduce(
+    (sum, fileKey) =>
+      sum +
+      calcDocumentCredits(
+        fileKey,
+        plan.enforcement.userTier,
+        MODEL_CLASS_ID_TO_SLUG[plan.resolveDocModelClass(fileKey)],
+      ),
+    0,
+  );
+  return Math.max(1, total);
+}
+
 export async function* orchestrateGeneration(
   input: GenerationInput,
   projectId?: string,
 ): AsyncGenerator<GenerationEvent> {
-  const userTier = legacyTierSlugToUserTier(input.tier);
   const promptDepth = toV3Tier(input.tier);
+  const { enforcement, tierId, docsToGenerate, resolveDocModelClass } = planGeneration(input);
 
-  const requestedDocs: DocumentFileKey[] =
-    input.selectedDocs ?? DEFAULT_CORE_DOCS_BY_TIER[userTier];
-
-  const enforcement = enforceTier(requestedDocs, input.modelId, input.tier);
   if (!enforcement.allowed && enforcement.reason) {
     yield { type: "error", error: enforcement.reason };
     yield { type: "all_done", success: false, error: enforcement.reason };
@@ -165,13 +219,7 @@ export async function* orchestrateGeneration(
     provider: modelToProvider(primaryModel),
   };
 
-  const tierId =
-    enforcement.userTier === "prime" ? "PRIME" : enforcement.userTier === "core" ? "CORE" : "BASE";
   const tierConfig = getTierConfig(tierId);
-
-  const docsToGenerate = DOCUMENT_GENERATION_ORDER.filter((k) =>
-    enforcement.sanitizedDocs.includes(k),
-  );
 
   const contextManager = new ContextManager(tierConfig.maxContextInjectionTokens);
   const generatedFiles: Partial<Record<DocumentFileKey, string>> = {};
@@ -187,16 +235,6 @@ export async function* orchestrateGeneration(
   const tierAllowed = tierConfig.allowedModelClasses
     .flatMap((mc) => resolveModelsForClass(mc))
     .filter(isModelConfigured);
-
-  function resolveDocModelClass(fileKey: DocumentFileKey): ModelClassId {
-    const slug =
-      input.perDocumentModelClass?.[fileKey] ?? getDefaultModelClass(fileKey, enforcement.userTier);
-    const classId = modelClassSlugToId(slug);
-    if (!validateModelClassForTier(tierId, classId)) {
-      return "HEMAT";
-    }
-    return classId;
-  }
 
   for (const fileKey of docsToGenerate) {
     const fileDef = ALL_FILES[fileKey];

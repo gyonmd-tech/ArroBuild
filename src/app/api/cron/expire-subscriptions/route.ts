@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PaymentService } from "@/lib/services/payment.service";
 import { logger } from "@/lib/logger";
+import { isAuthorizedCronRequest } from "@/lib/security/safe-compare";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -18,8 +19,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const auth = req.headers.get("authorization");
-  if (auth !== `Bearer ${secret}`) {
+  if (!isAuthorizedCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

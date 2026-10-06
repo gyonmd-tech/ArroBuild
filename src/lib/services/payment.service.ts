@@ -1,9 +1,9 @@
-import type { PaymentStatus, CreditLedgerType, SubscriptionTier } from "@prisma/client";
+import type { Payment, PaymentStatus, Prisma, SubscriptionTier } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { getTierConfig, parseBillingMonthsFromOrderId, PRIME_FIRST_MONTH_BONUS } from "@/lib/config/tiers";
 import { createSnapToken, isSuccessfulTransactionStatus, getTransactionStatus, verifyWebhookSignature } from "@/lib/midtrans";
 import { logger } from "@/lib/logger";
-import { CreditService } from "@/lib/services/credit.service";
+import { CreditService, runLedgerTransaction } from "@/lib/services/credit.service";
 import { getCreditTopupPack } from "@/lib/config/tiers";
 
 export interface MidtransWebhookPayload {
@@ -27,6 +27,8 @@ export class PaymentServiceError extends Error {
 }
 
 const SUBSCRIPTION_DAYS = 30;
+const RENEWAL_INTERVAL_DAYS = 28;
+const DAY_MS = 1000 * 60 * 60 * 24;
 
 function mapTransactionStatus(status: string): PaymentStatus {
   switch (status) {
@@ -45,6 +47,90 @@ function mapTransactionStatus(status: string): PaymentStatus {
     default:
       return "PENDING";
   }
+}
+
+async function grantSubscriptionForPayment(
+  tx: Prisma.TransactionClient,
+  payment: Payment,
+  orderId: string,
+  paymentEventId: string
+) {
+  const now = new Date();
+  const billingMonths = parseBillingMonthsFromOrderId(orderId);
+  const expiresAt = new Date(now);
+  expiresAt.setDate(expiresAt.getDate() + SUBSCRIPTION_DAYS * billingMonths);
+  const config = getTierConfig(payment.tier);
+
+  const priorProMaxPayments = await tx.payment.count({
+    where: {
+      userId: payment.userId,
+      tier: "PRIME",
+      status: { in: ["SETTLEMENT", "PAID"] },
+      id: { not: payment.id },
+    },
+  });
+  const firstProMaxBonus =
+    payment.tier === "PRIME" && priorProMaxPayments === 0 ? PRIME_FIRST_MONTH_BONUS : 0;
+  const creditsToAdd = config.creditsPerMonth + firstProMaxBonus;
+
+  await tx.subscription.upsert({
+    where: { userId: payment.userId },
+    create: {
+      userId: payment.userId,
+      tier: payment.tier,
+      status: "ACTIVE",
+      startDate: now,
+      renewalDate: expiresAt,
+      expiresAt,
+    },
+    update: {
+      tier: payment.tier,
+      status: "ACTIVE",
+      startDate: now,
+      renewalDate: expiresAt,
+      expiresAt,
+    },
+  });
+
+  const currentBalance = await tx.creditLedger.aggregate({
+    where: { userId: payment.userId },
+    _sum: { amount: true },
+  });
+  const balance = currentBalance._sum.amount ?? 0;
+
+  await tx.creditLedger.create({
+    data: {
+      userId: payment.userId,
+      type: "MONTHLY_REFRESH",
+      amount: creditsToAdd,
+      paymentId: payment.id,
+      balanceAfter: balance + creditsToAdd,
+      metadata: {
+        paymentEventId,
+        tier: payment.tier,
+        reason: "payment_settlement",
+        billingMonths,
+        firstProMaxBonus,
+      },
+    },
+  });
+
+  await tx.user.update({
+    where: { id: payment.userId },
+    data: {
+      tier: payment.tier,
+      creditBalance: balance + creditsToAdd,
+    },
+  });
+
+  logger.info("webhook_settlement_processed", {
+    orderId,
+    userId: payment.userId,
+    tier: payment.tier,
+    creditsAdded: creditsToAdd,
+    billingMonths,
+    firstProMaxBonus,
+  });
 }
 
 export const PaymentService = {
@@ -170,18 +256,10 @@ export const PaymentService = {
       throw new PaymentServiceError("INVALID_SIGNATURE", "Webhook signature invalid", 401);
     }
 
-    const existingEvent = await prisma.paymentEvent.findUnique({
-      where: { orderId },
-    });
-
-    if (existingEvent) {
-      return {
-        status: "success",
-        message: "Payment event already processed (idempotent)",
-      };
-    }
-
-    return prisma.$transaction(async (tx) => {
+    // Midtrans sends several notifications per order (pending → settlement, …).
+    // Each (orderId, status) is recorded once; the payment row's status decides
+    // whether a grant has already happened, so retries and late duplicates are no-ops.
+    return runLedgerTransaction(async (tx) => {
       const payment = await tx.payment.findUnique({ where: { orderId } });
       if (!payment) {
         throw new PaymentServiceError("PAYMENT_NOT_FOUND", "Payment not found", 404);
@@ -195,10 +273,22 @@ export const PaymentService = {
         );
       }
 
+      const existingEvent = await tx.paymentEvent.findUnique({
+        where: { orderId_transactionStatus: { orderId, transactionStatus } },
+        select: { id: true },
+      });
+      if (existingEvent) {
+        return {
+          status: "success",
+          message: "Payment event already processed (idempotent)",
+        };
+      }
+
       const paymentEvent = await tx.paymentEvent.create({
         data: {
           paymentId: payment.id,
           orderId,
+          transactionStatus,
           rawPayload: payload as object,
           signatureValid: true,
           signature: signatureKey,
@@ -206,26 +296,40 @@ export const PaymentService = {
         },
       });
 
-      const newStatus = mapTransactionStatus(transactionStatus);
-
-      await tx.payment.update({
-        where: { id: payment.id },
-        data: {
-          status: isSuccessfulTransactionStatus(transactionStatus) ? "SETTLEMENT" : newStatus,
-          midtransId: payload.transaction_id,
-          settledAt: isSuccessfulTransactionStatus(transactionStatus) ? new Date() : undefined,
-        },
-      });
+      const alreadySettled = payment.status === "SETTLEMENT" || payment.status === "PAID";
+      if (alreadySettled) {
+        // capture → settlement for cards, or a late failure notice: never grant twice
+        // and never downgrade a paid order.
+        return {
+          status: "success",
+          message: "Payment already settled",
+        };
+      }
 
       if (isSuccessfulTransactionStatus(transactionStatus)) {
+        await tx.payment.update({
+          where: { id: payment.id },
+          data: {
+            status: "SETTLEMENT",
+            midtransId: payload.transaction_id,
+            settledAt: new Date(),
+          },
+        });
+
         const topupCredits = PaymentService.parseTopupCreditsFromOrderId(orderId);
 
         if (topupCredits) {
-          await CreditService.topupCredits(payment.userId, topupCredits, payment.id, {
-            paymentEventId: paymentEvent.id,
-            orderId,
-            reason: "topup_settlement",
-          });
+          await CreditService.topupCredits(
+            payment.userId,
+            topupCredits,
+            payment.id,
+            {
+              paymentEventId: paymentEvent.id,
+              orderId,
+              reason: "topup_settlement",
+            },
+            tx
+          );
 
           logger.info("webhook_topup_processed", {
             orderId,
@@ -233,89 +337,16 @@ export const PaymentService = {
             creditsAdded: topupCredits,
           });
         } else {
-        const now = new Date();
-        const billingMonths = parseBillingMonthsFromOrderId(orderId);
-        const expiresAt = new Date(now);
-        expiresAt.setDate(expiresAt.getDate() + SUBSCRIPTION_DAYS * billingMonths);
-        const config = getTierConfig(payment.tier);
-
-        const priorProMaxPayments = await tx.payment.count({
-          where: {
-            userId: payment.userId,
-            tier: "PRIME",
-            status: { in: ["SETTLEMENT", "PAID"] },
-            id: { not: payment.id },
-          },
-        });
-        const firstProMaxBonus =
-          payment.tier === "PRIME" && priorProMaxPayments === 0
-            ? PRIME_FIRST_MONTH_BONUS
-            : 0;
-        const creditsToAdd = config.creditsPerMonth + firstProMaxBonus;
-
-        await tx.subscription.upsert({
-          where: { userId: payment.userId },
-          create: {
-            userId: payment.userId,
-            tier: payment.tier,
-            status: "ACTIVE",
-            startDate: now,
-            renewalDate: expiresAt,
-            expiresAt,
-          },
-          update: {
-            tier: payment.tier,
-            status: "ACTIVE",
-            startDate: now,
-            renewalDate: expiresAt,
-            expiresAt,
-          },
-        });
-
-        const currentBalance = await tx.creditLedger.aggregate({
-          where: { userId: payment.userId },
-          _sum: { amount: true },
-        });
-        const balance = currentBalance._sum.amount ?? 0;
-
-        await tx.creditLedger.create({
-          data: {
-            userId: payment.userId,
-            type: "MONTHLY_REFRESH" as CreditLedgerType,
-            amount: creditsToAdd,
-            paymentId: payment.id,
-            balanceAfter: balance + creditsToAdd,
-            metadata: {
-              paymentEventId: paymentEvent.id,
-              tier: payment.tier,
-              reason: "payment_settlement",
-              billingMonths,
-              firstProMaxBonus,
-            },
-          },
-        });
-
-        await tx.user.update({
-          where: { id: payment.userId },
-          data: {
-            tier: payment.tier,
-            creditBalance: balance + creditsToAdd,
-          },
-        });
-
-        logger.info("webhook_settlement_processed", {
-          orderId,
-          userId: payment.userId,
-          tier: payment.tier,
-          creditsAdded: creditsToAdd,
-          billingMonths,
-          firstProMaxBonus,
-        });
+          await grantSubscriptionForPayment(tx, payment, orderId, paymentEvent.id);
         }
-      } else if (["deny", "cancel", "expire", "failure"].includes(transactionStatus)) {
+      } else {
+        const newStatus = mapTransactionStatus(transactionStatus);
         await tx.payment.update({
           where: { id: payment.id },
-          data: { status: newStatus === "PENDING" ? "FAILED" : newStatus },
+          data: {
+            status: newStatus,
+            midtransId: payload.transaction_id ?? payment.midtransId,
+          },
         });
       }
 
@@ -360,27 +391,38 @@ export const PaymentService = {
 
     let refreshed = 0;
     for (const sub of activeSubs) {
-      const lastRefresh = await prisma.creditLedger.findFirst({
-        where: { userId: sub.userId, type: "MONTHLY_REFRESH" },
-        orderBy: { createdAt: "desc" },
+      // Check and grant in one serializable transaction so overlapping cron runs
+      // (or a settlement landing mid-run) cannot grant the same month twice.
+      const granted = await runLedgerTransaction(async (tx) => {
+        const lastRefresh = await tx.creditLedger.findFirst({
+          where: { userId: sub.userId, type: "MONTHLY_REFRESH" },
+          orderBy: { createdAt: "desc" },
+          select: { createdAt: true },
+        });
+
+        const daysSince = lastRefresh
+          ? (now.getTime() - lastRefresh.createdAt.getTime()) / DAY_MS
+          : Number.POSITIVE_INFINITY;
+        if (daysSince < RENEWAL_INTERVAL_DAYS) return false;
+
+        // Only grant a new month when the paid period still covers it; a 1-month
+        // plan must not receive a second allotment a few days before it expires.
+        if (sub.expiresAt && (sub.expiresAt.getTime() - now.getTime()) / DAY_MS < RENEWAL_INTERVAL_DAYS) {
+          return false;
+        }
+
+        await CreditService.refreshMonthlyCredits(sub.userId, undefined, tx);
+
+        const nextRenewal = new Date(now);
+        nextRenewal.setDate(nextRenewal.getDate() + SUBSCRIPTION_DAYS);
+        await tx.subscription.update({
+          where: { id: sub.id },
+          data: { renewalDate: nextRenewal },
+        });
+        return true;
       });
 
-      const daysSince = lastRefresh
-        ? (now.getTime() - lastRefresh.createdAt.getTime()) / (1000 * 60 * 60 * 24)
-        : 999;
-
-      if (daysSince < 28) continue;
-
-      await CreditService.applyRollover(sub.userId);
-      await CreditService.refreshMonthlyCredits(sub.userId);
-
-      const nextRenewal = new Date(now);
-      nextRenewal.setDate(nextRenewal.getDate() + SUBSCRIPTION_DAYS);
-      await prisma.subscription.update({
-        where: { id: sub.id },
-        data: { renewalDate: nextRenewal },
-      });
-
+      if (!granted) continue;
       refreshed++;
       logger.info("subscription_monthly_refresh", { userId: sub.userId, tier: sub.tier });
     }

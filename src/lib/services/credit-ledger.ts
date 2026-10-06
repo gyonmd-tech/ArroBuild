@@ -49,11 +49,18 @@ export function assertOwnedReservation(
   return Math.abs(reservation.amount);
 }
 
+/**
+ * Settle a hold against actual usage. Usage above the hold is capped at the
+ * hold (the user was quoted the hold, and the work is already delivered), so
+ * settlement never fails after content has been streamed.
+ */
 export function calculateReservationSettlement(
   currentBalance: number,
   heldCredits: number,
   actualCreditsUsed: number
 ): {
+  chargedCredits: number;
+  uncharged: number;
   chargeBalanceAfter: number;
   releaseAmount: number;
   finalBalance: number;
@@ -67,20 +74,15 @@ export function calculateReservationSettlement(
     );
   }
 
-  if (actualCreditsUsed > heldCredits) {
-    throw new CreditServiceError(
-      "CREDIT_OVERCHARGE",
-      `Kredit terpakai (${actualCreditsUsed}) melebihi hold (${heldCredits})`,
-      500
-    );
-  }
-
-  const chargeBalanceAfter = currentBalance - actualCreditsUsed;
+  const chargedCredits = Math.min(actualCreditsUsed, heldCredits);
+  const chargeBalanceAfter = currentBalance - chargedCredits;
   return {
+    chargedCredits,
+    uncharged: actualCreditsUsed - chargedCredits,
     chargeBalanceAfter,
     releaseAmount: heldCredits,
     finalBalance: chargeBalanceAfter + heldCredits,
-    surplus: heldCredits - actualCreditsUsed,
+    surplus: heldCredits - chargedCredits,
   };
 }
 

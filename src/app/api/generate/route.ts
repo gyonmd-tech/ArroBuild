@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { orchestrateGeneration } from "@/lib/ai/orchestrator";
+import { estimateGenerationCredits, orchestrateGeneration } from "@/lib/ai/orchestrator";
+import { flushQueue } from "@/lib/ai/db-writer";
+import { logger } from "@/lib/logger";
 import { prisma } from "@/lib/db/prisma";
 import type { GenerationInput } from "@/lib/ai/prompts/shared";
 import type { Prisma } from "@prisma/client";
@@ -33,7 +35,7 @@ import {
   FEATURE_PRIORITIES,
   FRONTEND_TIER_SLUGS,
 } from "@/lib/config/options";
-import { MODEL_CLASS, type ModelClassId } from "@/lib/config/tiers";
+import type { ModelClassId } from "@/lib/config/tiers";
 import { capFormInput } from "@/lib/ai-gateway/context-builder";
 import { sanitizePerDocumentModelClass, legacyTierSlugToUserTier } from "@/lib/config/documents";
 import { readJsonBody, RequestBodyError } from "@/lib/http/read-json-body";
@@ -89,7 +91,8 @@ const GenerationInputSchema = z.object({
   tier: z.enum(FRONTEND_TIER_SLUGS).optional(),
   modelId: z.string().optional(),
   selectedDocs: z.array(z.enum(DOCUMENT_FILE_KEYS)).optional(),
-  estimatedCredits: z.number().int().positive().optional().default(8),
+  /** Ignored: the hold is always computed on the server. Accepted for older clients. */
+  estimatedCredits: z.number().int().nonnegative().optional(),
 });
 
 export const runtime = "nodejs";
@@ -129,10 +132,10 @@ export async function POST(req: NextRequest) {
   await syncDbUser(supabaseUser);
   const userId = supabaseUser.id;
   const effectiveTier = await getEffectiveTier(userId);
-  const estimatedCredits = parsed.data.estimatedCredits ?? 8;
   const normalizedModelId = normalizeLegacyModelId(parsed.data.modelId);
 
-  const gate = await assertCanGenerate(userId, effectiveTier, normalizedModelId, estimatedCredits);
+  // Balance is enforced atomically by reserveCredit below; the gate checks plan and model only.
+  const gate = await assertCanGenerate(userId, effectiveTier, normalizedModelId, 0);
   if (!gate.ok) {
     return new Response(JSON.stringify({ error: gate.error }), {
       status: gate.status,
@@ -161,6 +164,8 @@ export async function POST(req: NextRequest) {
     ),
   };
 
+  const estimatedCredits = estimateGenerationCredits(input);
+
   let projectId: string;
   let reservationId: string | null = null;
 
@@ -176,7 +181,7 @@ export async function POST(req: NextRequest) {
           features: parsed.data.features,
           selectedDocs: parsed.data.selectedDocs,
           perDocumentModelClass: input.perDocumentModelClass,
-          estimatedCredits: parsed.data.estimatedCredits,
+          estimatedCredits,
         },
         status: "GENERATING",
         userId,
@@ -203,14 +208,24 @@ export async function POST(req: NextRequest) {
   }
 
   const encoder = new TextEncoder();
+  let clientGone = false;
   const stream = new ReadableStream({
     async start(controller) {
+      // The client may disconnect mid-generation; keep generating and settling
+      // credits, just stop writing to the closed stream.
       function send(data: object) {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        if (clientGone) return;
+        try {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+        } catch {
+          clientGone = true;
+        }
       }
 
       send({ type: "project_created", projectId });
       let generationSucceeded = false;
+      let generationErrored = false;
+      let settled = false;
       const generatedDocs: Array<{
         fileKey: string;
         modelClass: ModelClassId;
@@ -253,36 +268,64 @@ export async function POST(req: NextRequest) {
             });
           }
         }
-
-        if (generationSucceeded && reservationId) {
-          const documentsGenerated =
-            generatedDocs.length > 0
-              ? generatedDocs
-              : (parsed.data.selectedDocs ?? ["prd", "architecture", "plan-task"]).map(
-                  (fileKey) => ({
-                    fileKey,
-                    modelClass: MODEL_CLASS.HEMAT,
-                    tokensUsed: Math.max(1, Math.ceil(input.idea.length / 6)),
-                  }),
-                );
-          await CreditService.commitCredit(userId, reservationId, projectId, documentsGenerated);
-        }
       } catch (err) {
+        generationErrored = true;
         const message = err instanceof Error ? err.message : "Unexpected server error";
         send({ type: "error", error: message });
+      } finally {
+        // Generated files are written through a background queue; make sure they
+        // are persisted before the function can be frozen.
+        await flushQueue().catch(() => {});
 
         if (reservationId) {
-          await CreditService.releaseReservation(userId, reservationId, "generation_failed").catch(
-            () => {},
-          );
+          try {
+            if (generatedDocs.length > 0) {
+              // Charge only for documents actually delivered (partial success included).
+              await CreditService.commitCredit(userId, reservationId, projectId, generatedDocs, {
+                partial: !generationSucceeded,
+              });
+            } else {
+              await CreditService.releaseReservation(userId, reservationId, "generation_failed");
+            }
+            settled = true;
+          } catch (error) {
+            logger.error("generation_credit_settlement_failed", {
+              userId,
+              projectId,
+              reservationId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+
+          if (!settled) {
+            await CreditService.releaseReservation(
+              userId,
+              reservationId,
+              "settlement_failed",
+            ).catch(() => {});
+          }
         }
 
-        await prisma.project
-          .update({ where: { id: projectId }, data: { status: "FAILED" } })
-          .catch(() => {});
-      } finally {
-        controller.close();
+        if (generationErrored) {
+          await prisma.project
+            .update({
+              where: { id: projectId },
+              data: { status: generatedDocs.length > 0 ? "DONE" : "FAILED" },
+            })
+            .catch(() => {});
+        }
+
+        if (!clientGone) {
+          try {
+            controller.close();
+          } catch {
+            // already closed by the runtime
+          }
+        }
       }
+    },
+    cancel() {
+      clientGone = true;
     },
   });
 

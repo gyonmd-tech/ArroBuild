@@ -16,7 +16,6 @@ import { CreditService } from "@/lib/services/credit.service";
 import {
   assertMiniToolAccess,
   reserveMiniToolCredits,
-  runMiniToolCharge,
   settleMiniToolReservation,
 } from "@/lib/services/mini-tools.service";
 import { TierCapabilityError } from "@/lib/services/tier-capabilities";
@@ -40,12 +39,6 @@ const BodySchema = z.object({
   images: z.array(ImageSchema).max(10).optional(),
   reserve: z.boolean().optional(),
 });
-
-const TOOLS_WITH_RESERVE: MiniToolId[] = [
-  "readme-generator",
-  "copy-studio",
-  "stack-advisor",
-];
 
 function resolveCredits(
   toolId: MiniToolId,
@@ -135,23 +128,22 @@ export async function POST(req: NextRequest) {
   }
 
   const creditsNeeded = resolveCredits(toolId, parsed.data.input, images.length);
-  const useReserve = TOOLS_WITH_RESERVE.includes(toolId);
   let reservationId: string | null = null;
 
   try {
-    if (useReserve) {
-      const reservation = await reserveMiniToolCredits(
-        dbUser.id,
-        toolId,
-        {
-          mode: parsed.data.input.mode,
-          templateId: parsed.data.input.templateId,
-          sectionCount: images.length || undefined,
-        },
-        creditsNeeded
-      );
-      reservationId = reservation.reservationId;
-    }
+    // Hold credits before calling the model so concurrent runs cannot spend
+    // the same balance and a 402 never arrives after the AI cost is incurred.
+    const reservation = await reserveMiniToolCredits(
+      dbUser.id,
+      toolId,
+      {
+        mode: parsed.data.input.mode,
+        templateId: parsed.data.input.templateId,
+        sectionCount: images.length || undefined,
+      },
+      creditsNeeded
+    );
+    reservationId = reservation.reservationId;
 
     let output: string;
 
@@ -179,24 +171,18 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    let balanceAfter: number;
-    if (useReserve && reservationId) {
-      const settled = await settleMiniToolReservation(
-        dbUser.id,
-        reservationId,
-        toolId,
-        {
-          mode: parsed.data.input.mode,
-          templateId: parsed.data.input.templateId,
-          sectionCount: images.length || undefined,
-        },
-        creditsNeeded
-      );
-      balanceAfter = settled.balanceAfter;
-    } else {
-      const charged = await runMiniToolCharge(dbUser.id, toolId, creditsNeeded);
-      balanceAfter = charged.balanceAfter;
-    }
+    const settled = await settleMiniToolReservation(
+      dbUser.id,
+      reservationId,
+      toolId,
+      {
+        mode: parsed.data.input.mode,
+        templateId: parsed.data.input.templateId,
+        sectionCount: images.length || undefined,
+      },
+      creditsNeeded
+    );
+    const balanceAfter = settled.balanceAfter;
 
     return NextResponse.json({
       output,

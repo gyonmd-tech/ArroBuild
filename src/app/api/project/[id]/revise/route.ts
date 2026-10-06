@@ -314,6 +314,31 @@ export async function POST(
       );
     }
 
+    // Charge before writing: a settled reservation cannot be replayed (409), so
+    // a repeated accept can no longer save content without paying for it.
+    let commit: { actualCreditsUsed: number; balanceAfter: number };
+    if (useFree) {
+      commit = await CreditService.commitFreeRevision(dbUser.id, projectId, {
+        fileKey: data.fileKey,
+        sectionName: data.sectionName,
+        version: nextVersion,
+      });
+    } else {
+      // The price is the hold quoted at preview time (computed on the server);
+      // the client-supplied estimate is ignored.
+      commit = await CreditService.commitRevision(
+        dbUser.id,
+        data.reservationId!,
+        projectId,
+        undefined,
+        {
+          fileKey: data.fileKey,
+          sectionName: data.sectionName,
+          version: nextVersion,
+        }
+      );
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.documentRevision.create({
         data: {
@@ -333,28 +358,6 @@ export async function POST(
         },
       });
     });
-
-    let commit: { actualCreditsUsed: number; balanceAfter: number };
-    if (useFree) {
-      commit = await CreditService.commitFreeRevision(dbUser.id, projectId, {
-        fileKey: data.fileKey,
-        sectionName: data.sectionName,
-        version: nextVersion,
-      });
-    } else {
-      const credits = data.estimatedCredits ?? estimateRevisionCredits(data.newContent);
-      commit = await CreditService.commitRevision(
-        dbUser.id,
-        data.reservationId!,
-        projectId,
-        credits,
-        {
-          fileKey: data.fileKey,
-          sectionName: data.sectionName,
-          version: nextVersion,
-        }
-      );
-    }
 
     logger.info("section_revision_accepted", {
       userId: dbUser.id,

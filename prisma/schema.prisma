@@ -160,13 +160,15 @@ model PaymentEvent {
   id             String    @id @default(cuid())
   paymentId      String
   payment        Payment   @relation(fields: [paymentId], references: [id], onDelete: Cascade)
-  orderId        String    @unique
+  orderId           String
+  transactionStatus String    @default("")
   rawPayload     Json
   signatureValid Boolean   @default(false)
   signature      String?
   receivedAt     DateTime  @default(now())
   processedAt    DateTime?
 
+  @@unique([orderId, transactionStatus])
   @@index([paymentId])
   @@map("payment_events")
 }

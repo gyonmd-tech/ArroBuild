@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/reconcile-ledger",
       "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/cron/release-stale-holds",
+      "schedule": "30 4 * * *"
     }
   ]
 }

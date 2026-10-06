@@ -56,5 +56,48 @@ jobs:
       - name: Build
         run: npm run build
 
+  credit-integration:
+    name: Credit & payment integration (Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: arro
+          POSTGRES_PASSWORD: arro
+          POSTGRES_DB: arro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U arro"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://arro:arro@localhost:5432/arro
+      DIRECT_URL: postgresql://arro:arro@localhost:5432/arro
+      MIDTRANS_SERVER_KEY: SB-Mid-server-ci-integration-key-0000000000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Stub Supabase auth schema
+        run: |
+          PGPASSWORD=arro psql -h localhost -U arro -d arro -c \
+            "create schema auth; create function auth.uid() returns uuid language sql stable as 'select null::uuid';"
+
+      - name: Apply migrations
+        run: npx prisma migrate deploy
+
+      - name: Credit & payment integration tests
+        run: npm run test:credits:db
+
   # Jalankan lokal: npm run dev & npm run test:backend
   # Atau tambahkan secrets repo + job terpisah jika ingin E2E di CI

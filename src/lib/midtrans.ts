@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import { safeEqual } from "@/lib/security/safe-compare";
 import type { PricingTierId } from "./pricing";
 import { getPaidTier, pricingIdToTierId } from "./pricing";
 import type { SubscriptionTier } from "@prisma/client";
@@ -169,7 +170,7 @@ export function verifyWebhookSignature(payload: {
   const expected = createHash("sha512")
     .update(payload.order_id + payload.status_code + payload.gross_amount + serverKey)
     .digest("hex");
-  return expected === payload.signature_key;
+  return safeEqual(expected, payload.signature_key);
 }
 
 export function tierIdToSubscriptionTier(tierId: PricingTierId): SubscriptionTier {

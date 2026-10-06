@@ -75,8 +75,11 @@ assert("full usage ends at original balance minus full usage", full.finalBalance
 const zero = calculateReservationSettlement(92, 8, 0);
 assert("zero usage restores the original balance", zero.finalBalance === 100);
 
-const overcharge = captureError(() => calculateReservationSettlement(92, 8, 9));
-assert("usage above hold is rejected", overcharge?.code === "CREDIT_OVERCHARGE");
+const overcharge = calculateReservationSettlement(92, 8, 9);
+assert("usage above hold is capped at the hold", overcharge.chargedCredits === 8);
+assert("capped usage ends at original balance minus hold", overcharge.finalBalance === 92);
+assert("capped usage reports the uncharged excess", overcharge.uncharged === 1);
+assert("capped usage has no surplus", overcharge.surplus === 0);
 
 const fractional = captureError(() => calculateReservationSettlement(92, 8, 1.5));
 assert("fractional credit usage is rejected", fractional?.code === "INVALID_CREDIT_USAGE");

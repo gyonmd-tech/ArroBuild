@@ -1,31 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { logger } from "@/lib/logger";
+import { isAuthorizedCronRequest } from "@/lib/security/safe-compare";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-function authorize(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (!secret) return false;
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${secret}`;
-}
-
 const DRIFT_THRESHOLD = 10;
 
 export async function POST(req: NextRequest) {
-  if (!authorize(req)) {
+  if (!isAuthorizedCronRequest(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const users = await prisma.user.findMany({
-    select: { id: true, email: true, creditBalance: true },
+    select: { id: true, creditBalance: true },
   });
 
   const drifts: Array<{
     userId: string;
-    email: string;
     cached: number;
     ledgerSum: number;
     delta: number;
@@ -41,14 +34,12 @@ export async function POST(req: NextRequest) {
     if (delta > DRIFT_THRESHOLD) {
       drifts.push({
         userId: user.id,
-        email: user.email,
         cached: user.creditBalance,
         ledgerSum,
         delta,
       });
       logger.error("ledger_drift_detected", {
         userId: user.id,
-        email: user.email,
         cached: user.creditBalance,
         ledgerSum,
         delta,

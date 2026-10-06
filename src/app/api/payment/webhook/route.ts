@@ -31,8 +31,9 @@ export async function POST(req: Request) {
         ? (error as { statusCode: number }).statusCode
         : 500;
 
+    // Details stay in the log; the caller only learns the status class.
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Internal server error" },
+      { error: statusCode >= 500 ? "Internal server error" : "Webhook rejected" },
       { status: statusCode }
     );
   }
