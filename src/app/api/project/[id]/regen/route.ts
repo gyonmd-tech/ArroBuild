@@ -11,6 +11,7 @@ import { CreditService, CreditServiceError } from "@/lib/services/credit.service
 import { assertTierCapability, TierCapabilityError } from "@/lib/services/tier-capabilities";
 import type { DocumentFileKey } from "@/lib/config/documents";
 import type { ModelClassId } from "@/lib/config/tiers";
+import { enforceUserRouteLimit } from "@/lib/rate-limit";
 
 const BodySchema = z.object({
   fileKey: z.enum(DOCUMENT_FILE_KEYS),
@@ -26,6 +27,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!supabaseUser) {
     return NextResponse.json({ error: "Login wajib" }, { status: 401 });
   }
+
+  const rateLimited = await enforceUserRouteLimit(supabaseUser.id, "regen");
+  if (rateLimited) return rateLimited;
 
   const dbUser = await syncDbUser(supabaseUser);
 

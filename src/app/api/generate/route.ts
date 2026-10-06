@@ -39,6 +39,7 @@ import type { ModelClassId } from "@/lib/config/tiers";
 import { capFormInput } from "@/lib/ai-gateway/context-builder";
 import { sanitizePerDocumentModelClass, legacyTierSlugToUserTier } from "@/lib/config/documents";
 import { readJsonBody, RequestBodyError } from "@/lib/http/read-json-body";
+import { enforceUserRouteLimit } from "@/lib/rate-limit";
 
 const MAX_GENERATE_BODY_BYTES = 256_000;
 
@@ -128,6 +129,9 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
     });
   }
+
+  const rateLimited = await enforceUserRouteLimit(supabaseUser.id, "generate");
+  if (rateLimited) return rateLimited;
 
   await syncDbUser(supabaseUser);
   const userId = supabaseUser.id;

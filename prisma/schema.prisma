@@ -72,6 +72,7 @@ model Project {
   files GeneratedFile[]
 
   @@index([userId])
+  @@index([userId, createdAt])
   @@map("projects")
 }
 
@@ -200,6 +201,7 @@ model CreditLedger {
 
   @@index([userId, createdAt])
   @@index([type])
+  @@index([projectId])
   @@map("credit_ledger")
 }
 

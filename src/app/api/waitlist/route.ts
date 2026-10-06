@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma";
 import { getAllTierCapacity, getTierCapacity } from "@/lib/services/capacity.service";
 import { tierIdFromPricingSlug, type TierId } from "@/lib/config/tiers";
 import { PAID_TIER_IDS } from "@/lib/pricing";
+import { enforceUserRouteLimit } from "@/lib/rate-limit";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -43,6 +44,13 @@ export async function POST(req: Request) {
   }
 
   const profile = await getSessionProfile();
+  const ip =
+    req.headers.get("x-real-ip") ??
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "unknown";
+  const rateLimited = await enforceUserRouteLimit(profile?.id ?? `ip:${ip}`, "waitlist");
+  if (rateLimited) return rateLimited;
+
   const email = (parsed.data.email ?? profile?.email)?.toLowerCase();
   if (!email) {
     return NextResponse.json(

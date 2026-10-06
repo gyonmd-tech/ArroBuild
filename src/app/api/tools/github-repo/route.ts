@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getSupabaseUser, syncDbUser } from "@/lib/auth";
 import { fetchGitHubRepo, GitHubRepoError } from "@/lib/services/github-repo.service";
+import { enforceUserRouteLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -14,6 +15,9 @@ export async function POST(req: NextRequest) {
   if (!supabaseUser) {
     return NextResponse.json({ error: "Login diperlukan." }, { status: 401 });
   }
+
+  const rateLimited = await enforceUserRouteLimit(supabaseUser.id, "github");
+  if (rateLimited) return rateLimited;
 
   await syncDbUser(supabaseUser);
 

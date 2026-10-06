@@ -4,17 +4,21 @@ import { runCopyDiscussTurn, type CopyDiscussFields } from "@/lib/ai/copy-discus
 import { getSupabaseUser, syncDbUser } from "@/lib/auth";
 import { assertMiniToolAccess } from "@/lib/services/mini-tools.service";
 import { TierCapabilityError } from "@/lib/services/tier-capabilities";
+import { enforceUserRouteLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const BodySchema = z.object({
-  filledFields: z.record(z.string(), z.unknown()).optional(),
+  filledFields: z
+    .record(z.string().max(64), z.unknown())
+    .refine((fields) => JSON.stringify(fields).length <= 20_000, "filledFields terlalu besar")
+    .optional(),
   messages: z
     .array(
       z.object({
         role: z.enum(["assistant", "user"]),
-        content: z.string(),
+        content: z.string().max(4000),
       })
     )
     .max(24)
@@ -33,6 +37,9 @@ export async function POST(req: NextRequest) {
   if (!supabaseUser) {
     return NextResponse.json({ error: "Login diperlukan." }, { status: 401 });
   }
+
+  const rateLimited = await enforceUserRouteLimit(supabaseUser.id, "discuss");
+  if (rateLimited) return rateLimited;
 
   const dbUser = await syncDbUser(supabaseUser);
 

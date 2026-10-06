@@ -9,6 +9,7 @@ const PROTECTED_PREFIXES = [
   "/api/payment",
   "/api/user",
   "/api/whatsapp",
+  "/api/admin",
 ] as const;
 
 const PUBLIC_API_PATHS = new Set([

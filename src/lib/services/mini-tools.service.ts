@@ -11,6 +11,7 @@ import {
   getUserTierId,
 } from "@/lib/services/tier-capabilities";
 import { CreditService, CreditServiceError } from "@/lib/services/credit.service";
+import { startOfMonthWib } from "@/lib/quota-period";
 
 const PRO_DEFAULT_TOOLS: MiniToolId[] = [
   "prompt-doctor",
@@ -64,9 +65,7 @@ export async function assertMiniToolAccess(
     }
   }
 
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
+  const startOfMonth = startOfMonthWib();
 
   if (tierId === TIER.BASE) {
     const used = await prisma.creditLedger.count({

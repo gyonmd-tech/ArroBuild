@@ -10,11 +10,20 @@ let _openai: OpenAI | null = null;
 let _anthropic: Anthropic | null = null;
 let _deepseek: OpenAI | null = null;
 
+/**
+ * Providers are always streamed. OpenAI/Anthropic SDK timeouts bound the wait
+ * for the first byte; Gemini's bounds the whole call, so it stays below the
+ * longest route maxDuration (180s). SDK retries are off because the
+ * orchestrator and generateWithFallback already retry and fall back per model.
+ */
+const FIRST_BYTE_TIMEOUT_MS = 60_000;
+const GEMINI_CALL_TIMEOUT_MS = 150_000;
+
 function getGemini(): GoogleGenAI {
   if (!_gemini) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("GEMINI_API_KEY is not set");
-    _gemini = new GoogleGenAI({ apiKey: key });
+    _gemini = new GoogleGenAI({ apiKey: key, httpOptions: { timeout: GEMINI_CALL_TIMEOUT_MS } });
   }
   return _gemini;
 }
@@ -23,7 +32,7 @@ function getOpenAI(): OpenAI {
   if (!_openai) {
     const key = process.env.OPENAI_API_KEY;
     if (!key) throw new Error("OPENAI_API_KEY is not set");
-    _openai = new OpenAI({ apiKey: key });
+    _openai = new OpenAI({ apiKey: key, timeout: FIRST_BYTE_TIMEOUT_MS, maxRetries: 0 });
   }
   return _openai;
 }
@@ -32,7 +41,7 @@ function getAnthropic(): Anthropic {
   if (!_anthropic) {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) throw new Error("ANTHROPIC_API_KEY is not set");
-    _anthropic = new Anthropic({ apiKey: key });
+    _anthropic = new Anthropic({ apiKey: key, timeout: FIRST_BYTE_TIMEOUT_MS, maxRetries: 0 });
   }
   return _anthropic;
 }
@@ -44,6 +53,8 @@ function getDeepSeek(): OpenAI {
     _deepseek = new OpenAI({
       apiKey: key,
       baseURL: "https://api.deepseek.com",
+      timeout: FIRST_BYTE_TIMEOUT_MS,
+      maxRetries: 0,
     });
   }
   return _deepseek;

@@ -16,6 +16,7 @@ import {
 } from "@/lib/config/documents";
 import type { ModelId } from "./prompts/shared";
 import { normalizeLegacyModelId } from "@/lib/legacy-model-ids";
+import { startOfDayWib, startOfMonthWib } from "@/lib/quota-period";
 
 function normalizeSelectedModel(model?: string): ModelId | undefined {
   const normalized = normalizeLegacyModelId(model);
@@ -179,9 +180,7 @@ export function getTierQuotaLimits(tierSlug: string | undefined | null) {
 }
 
 async function countProjectsThisMonth(userId: string): Promise<number> {
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
+  const startOfMonth = startOfMonthWib();
 
   return prisma.project.count({
     where: {
@@ -193,8 +192,7 @@ async function countProjectsThisMonth(userId: string): Promise<number> {
 }
 
 async function countProjectsToday(userId: string): Promise<number> {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
+  const startOfDay = startOfDayWib();
 
   return prisma.project.count({
     where: {

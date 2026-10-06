@@ -14,6 +14,7 @@ import { CreditService } from "@/lib/services/credit.service";
 import { getTierConfig, TIER, pricingSlugFromTierId, type TierId } from "@/lib/config/tiers";
 import type { UserTier } from "@/lib/config/documents";
 import { normalizeLegacyModelId } from "@/lib/legacy-model-ids";
+import { startOfMonthWib } from "@/lib/quota-period";
 
 export { normalizeLegacyModelId } from "@/lib/legacy-model-ids";
 
@@ -110,9 +111,7 @@ export async function assertCanGenerate(
   }
 
   const config = getTierConfig(tierId);
-  const startOfMonth = new Date();
-  startOfMonth.setDate(1);
-  startOfMonth.setHours(0, 0, 0, 0);
+  const startOfMonth = startOfMonthWib();
 
   const monthlyCount = await prisma.project.count({
     where: {

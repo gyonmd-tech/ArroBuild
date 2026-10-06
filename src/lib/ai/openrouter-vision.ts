@@ -18,6 +18,9 @@ function getOpenRouter(): OpenAI {
     _client = new OpenAI({
       apiKey: key,
       baseURL: "https://openrouter.ai/api/v1",
+      // Non-streaming call inside a 120s route: bound the whole request.
+      timeout: 100_000,
+      maxRetries: 1,
       defaultHeaders: {
         "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://arrobuild.com",
         "X-Title": "ArroBuild",

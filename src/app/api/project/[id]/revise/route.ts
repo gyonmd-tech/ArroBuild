@@ -27,6 +27,7 @@ import {
   getRevisionQuota,
   TierCapabilityError,
 } from "@/lib/services/tier-capabilities";
+import { enforceUserRouteLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 90;
@@ -86,6 +87,10 @@ async function requireOwnedProject(projectId: string) {
       ),
     } as const;
   }
+
+  const rateLimited = await enforceUserRouteLimit(supabaseUser.id, "revise");
+  if (rateLimited) return { error: rateLimited } as const;
+
   const dbUser = await syncDbUser(supabaseUser);
   const project = await prisma.project.findUnique({
     where: { id: projectId },

@@ -82,6 +82,8 @@ export function shouldFallback(err: unknown): boolean {
   return isRateLimitError(err) || isProviderUnavailableError(err);
 }
 
+const MAX_BACKOFF_MS = 15_000;
+
 export function getBackoffMs(err: unknown, attempt: number): number {
   // Extract retry-after from error message if present
   const msg = err instanceof Error ? err.message : String(err);
@@ -89,12 +91,13 @@ export function getBackoffMs(err: unknown, attempt: number): number {
     msg.match(/retry in (\d+(?:\.\d+)?)s/i) ??
     msg.match(/"retryDelay":\s*"(\d+)s"/);
   if (retryMatch) {
-    return Math.ceil(parseFloat(retryMatch[1]) * 1000) + 1000;
+    // Never sleep longer than a route can afford; past the cap, fall back instead.
+    return Math.min(Math.ceil(parseFloat(retryMatch[1]) * 1000) + 1000, MAX_BACKOFF_MS);
   }
 
   // Rate limit: exponential backoff starting at 2s
   if (isRateLimitError(err)) {
-    return Math.min(2000 * Math.pow(2, attempt), 32000);
+    return Math.min(2000 * Math.pow(2, attempt), MAX_BACKOFF_MS);
   }
 
   // Other errors: flat 500ms

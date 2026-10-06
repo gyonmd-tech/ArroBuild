@@ -13,6 +13,7 @@ import {
   type InterviewMessage,
 } from "@/lib/ai/interview";
 import { logger } from "@/lib/logger";
+import { enforceUserRouteLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -77,6 +78,9 @@ export async function POST(req: NextRequest) {
       { status: 401 }
     );
   }
+
+  const rateLimited = await enforceUserRouteLimit(supabaseUser.id, "interview");
+  if (rateLimited) return rateLimited;
 
   let body: unknown;
   try {

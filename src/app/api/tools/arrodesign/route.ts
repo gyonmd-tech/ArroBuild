@@ -25,6 +25,7 @@ import type { ArroDesignProgress } from "@/lib/ai/arrodesign-engine";
 import { logger } from "@/lib/logger";
 import { SafeUrlError, validatePublicHttpUrl } from "@/lib/security/safe-url";
 import { readJsonBody, RequestBodyError } from "@/lib/http/read-json-body";
+import { enforceUserRouteLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 180; // analisis bisa lama — 3 menit
@@ -44,6 +45,9 @@ export async function POST(req: NextRequest) {
   if (!supabaseUser) {
     return NextResponse.json({ error: "Login diperlukan." }, { status: 401 });
   }
+
+  const rateLimited = await enforceUserRouteLimit(supabaseUser.id, "tools");
+  if (rateLimited) return rateLimited;
 
   const dbUser = await syncDbUser(supabaseUser);
 

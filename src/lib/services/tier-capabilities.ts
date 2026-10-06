@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db/prisma";
 import { getTierConfig, TIER, type TierId } from "@/lib/config/tiers";
 import { resolveTierId } from "@/lib/services/tier.service";
+import { startOfMonthWib } from "@/lib/quota-period";
 
 export type TierCapability =
   | "fork_project"
@@ -107,10 +108,7 @@ export async function assertTierCapability(
 }
 
 function startOfMonth(): Date {
-  const d = new Date();
-  d.setDate(1);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return startOfMonthWib();
 }
 
 export async function countMonthlyFreeRevisions(userId: string): Promise<number> {

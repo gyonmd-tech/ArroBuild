@@ -20,6 +20,7 @@ import {
 } from "@/lib/services/mini-tools.service";
 import { TierCapabilityError } from "@/lib/services/tier-capabilities";
 import { readJsonBody, RequestBodyError } from "@/lib/http/read-json-body";
+import { enforceUserRouteLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -63,6 +64,9 @@ export async function POST(req: NextRequest) {
   if (!supabaseUser) {
     return NextResponse.json({ error: "Login diperlukan untuk mini tools." }, { status: 401 });
   }
+
+  const rateLimited = await enforceUserRouteLimit(supabaseUser.id, "tools");
+  if (rateLimited) return rateLimited;
 
   const dbUser = await syncDbUser(supabaseUser);
 
