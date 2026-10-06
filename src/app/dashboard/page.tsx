@@ -85,7 +85,8 @@ function DashboardContent() {
     if (!mountedRef.current) return false;
     setLoadError(null);
     const res = await fetch("/api/user/me", { credentials: "include", cache: "no-store" });
-    const json = (await res.json()) as MeResponse & { error?: string };
+    // A gateway error returns HTML, not JSON; treat it like an empty response.
+    const json = (await res.json().catch(() => ({}))) as MeResponse & { error?: string };
 
     if (!mountedRef.current) return false;
 

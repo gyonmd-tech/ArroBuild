@@ -525,7 +525,7 @@ export default function StackStep({ productType, value, onChange, onNext, onBack
               const isRecommended = bundle.id === recommendedBundle;
 
               return (
-                <button
+                <button type="button"
                   key={bundle.id}
                   onClick={() => {
                     if (isSelected) {
@@ -615,7 +615,7 @@ export default function StackStep({ productType, value, onChange, onNext, onBack
             })}
 
             {/* Rakit Sendiri */}
-            <button
+            <button type="button"
               onClick={() => {
                 update({ stackBundle: undefined });
                 setShowCustomize(true);
@@ -825,7 +825,7 @@ export default function StackStep({ productType, value, onChange, onNext, onBack
                     {ANIMATION_LIBS.map((lib) => {
                       const isActive = value.animationLibrary === lib.id;
                       return (
-                        <button
+                        <button type="button"
                           key={lib.id}
                           onClick={() => update({ animationLibrary: isActive ? undefined : lib.id })}
                           className="text-left rounded-xl px-4 py-3 transition-all duration-150"
@@ -861,7 +861,7 @@ export default function StackStep({ productType, value, onChange, onNext, onBack
                 {DESIGNS_DATA.map((ds) => {
                   const isActive = value.design === ds.id;
                   return (
-                    <button
+                    <button type="button"
                       key={ds.id}
                       onClick={() => update({ design: ds.id })}
                       className="text-left rounded-xl overflow-hidden transition-all duration-300 group flex flex-col"
@@ -1039,7 +1039,7 @@ export default function StackStep({ productType, value, onChange, onNext, onBack
               </div>
 
               {/* ── H: Tools Ekosistem (collapsible) ── */}
-              <button
+              <button type="button"
                 onClick={() => setShowTools(!showTools)}
                 className="flex items-center gap-2 text-sm transition-colors mb-4 w-full text-left"
                 style={{ color: "rgba(255,255,255,0.4)" }}
@@ -1160,7 +1160,7 @@ export default function StackStep({ productType, value, onChange, onNext, onBack
 
           {/* Mobile navigation */}
           <div className="flex gap-3 mt-6 lg:hidden">
-            <button
+            <button type="button"
               onClick={onBack}
               className="px-6 py-4 rounded-2xl text-base font-semibold transition-all"
               style={{
@@ -1192,7 +1192,7 @@ export default function StackStep({ productType, value, onChange, onNext, onBack
             <StackSummaryCard value={value} onNext={onNext} canProceed={true} />
 
             {/* Back button */}
-            <button
+            <button type="button"
               onClick={onBack}
               className="w-full py-3 rounded-xl text-sm font-medium transition-all"
               style={{

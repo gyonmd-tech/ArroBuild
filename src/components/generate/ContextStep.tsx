@@ -663,7 +663,7 @@ export default function ContextStep({ productType, value, onChange, features, on
             <span className="w-1.5 h-1.5 rounded-full" style={{ background: "var(--color-lime)" }} />
             Step 2 of 4
           </div>
-          <button
+          <button type="button"
             onClick={onBack}
             className="flex items-center gap-1.5 text-xs transition-colors"
             style={{ color: "rgba(255,255,255,0.35)" }}
@@ -733,7 +733,7 @@ export default function ContextStep({ productType, value, onChange, features, on
 
       {/* Optional extras */}
       <div className="mb-8">
-        <button
+        <button type="button"
           onClick={() => setShowOptional(!showOptional)}
           className="flex items-center gap-2 text-sm transition-colors mb-4 w-full text-left"
           style={{ color: "rgba(255,255,255,0.4)" }}
@@ -853,7 +853,7 @@ export default function ContextStep({ productType, value, onChange, features, on
 
       {/* Navigation */}
       <div className="flex gap-3">
-        <button
+        <button type="button"
           onClick={onBack}
           className="px-6 py-4 rounded-2xl text-sm font-medium transition-all"
           style={{
@@ -864,7 +864,7 @@ export default function ContextStep({ productType, value, onChange, features, on
         >
           ← Kembali
         </button>
-        <button
+        <button type="button"
           onClick={onNext}
           disabled={!hasAnyAnswer}
           className="flex-1 py-4 rounded-2xl font-semibold text-base transition-all duration-200"

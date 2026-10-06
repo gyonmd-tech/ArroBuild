@@ -32,7 +32,7 @@ function CopyButton({ text }: { text: string }) {
   }
 
   return (
-    <button
+    <button type="button"
       id="copy-file-btn"
       onClick={handleCopy}
       className="btn btn-secondary btn-sm flex items-center gap-1.5"
@@ -195,7 +195,7 @@ export default function DocPreview({ projectId, files, onRestart }: DocPreviewPr
                 Buka di workspace
               </a>
             )}
-            <button
+            <button type="button"
               id="preview-download-btn"
               onClick={handleDownloadClick}
               className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-mono font-bold text-sm transition-all"
@@ -212,7 +212,7 @@ export default function DocPreview({ projectId, files, onRestart }: DocPreviewPr
               </svg>
               Download ZIP
             </button>
-            <button
+            <button type="button"
               id="preview-restart-btn"
               onClick={onRestart}
               className="px-4 py-2.5 rounded-lg font-mono text-sm transition-all"
@@ -303,7 +303,7 @@ export default function DocPreview({ projectId, files, onRestart }: DocPreviewPr
           const m = FILE_META[key];
           const isActive = activeKey === key;
           return (
-            <button
+            <button type="button"
               key={key}
               id={`preview-tab-${key}`}
               onClick={() => {
@@ -350,7 +350,7 @@ export default function DocPreview({ projectId, files, onRestart }: DocPreviewPr
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button
+            <button type="button"
               id={`toggle-raw-${activeKey}`}
               onClick={() => {
                 trackEvent("raw_toggle", { enabled: !showRaw });

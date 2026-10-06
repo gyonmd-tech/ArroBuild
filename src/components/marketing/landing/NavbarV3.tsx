@@ -300,7 +300,7 @@ export default function NavbarV3({ solid = false }: { solid?: boolean }) {
           </div>
 
           {/* Mobile Hamburger */}
-          <button
+          <button type="button"
             onClick={() => setMenuOpen(!menuOpen)}
             className="nav-mobile"
             style={{

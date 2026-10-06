@@ -278,6 +278,10 @@
   input[type="text"], input[type="email"], input[type="password"], textarea, .cursor-text {
     cursor: text !important;
   }
+  /* The branded pointer must not hide that a control is unavailable. */
+  :disabled, :disabled *, [aria-disabled="true"], [aria-disabled="true"] * {
+    cursor: not-allowed !important;
+  }
 }
 
 html {

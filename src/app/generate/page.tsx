@@ -605,7 +605,7 @@ export default function GeneratePage() {
 
                   return (
                     <div key={label} className="flex items-center">
-                      <button
+                      <button type="button"
                         onClick={() => isCompleted && setStep(stepName)}
                         className="flex items-center gap-2.5 transition-all group px-3"
                         style={{ cursor: isCompleted ? "pointer" : "default" }}

@@ -280,7 +280,7 @@ export default function ConfirmScreen({
       {/* Summary blocks */}
       <div className="flex flex-col gap-3 mb-6">
         {/* Product & Stage */}
-        <button
+        <button type="button"
           onClick={() => onEdit("product-type")}
           className="text-left px-4 py-4 rounded-xl transition-all group w-full"
           style={{
@@ -324,7 +324,7 @@ export default function ConfirmScreen({
               >
                 — Mini Brief Preview
               </span>
-              <button
+              <button type="button"
                 onClick={() => onEdit("context")}
                 className="font-mono text-[11px] opacity-0 group-hover:opacity-100 transition-opacity z-10 relative cursor-pointer hover:text-white"
                 style={{ color: "var(--color-text-tertiary)" }}
@@ -373,7 +373,7 @@ export default function ConfirmScreen({
         )}
 
         {/* Stack */}
-        <button
+        <button type="button"
           onClick={() => onEdit("stack")}
           className="text-left px-4 py-4 rounded-xl transition-all group w-full"
           style={{
@@ -445,7 +445,7 @@ export default function ConfirmScreen({
         </button>
 
         {/* Docs & Model */}
-        <button
+        <button type="button"
           onClick={() => onEdit("docs")}
           className="text-left px-4 py-4 rounded-xl transition-all group w-full"
           style={{
@@ -787,7 +787,7 @@ export default function ConfirmScreen({
 
       {/* Actions */}
       <div className="flex gap-3">
-        <button
+        <button type="button"
           onClick={() => onEdit("docs")}
           className="px-5 py-3 rounded-xl font-mono text-sm transition-all"
           style={{
@@ -798,7 +798,7 @@ export default function ConfirmScreen({
         >
           ← Ubah pilihan
         </button>
-        <button
+        <button type="button"
           onClick={canGenerate ? onGenerate : undefined}
           disabled={!canGenerate}
           className="flex-1 py-3 rounded-xl font-mono font-bold text-sm transition-all flex items-center justify-center gap-2"

@@ -261,7 +261,7 @@ export default function DocumentPickerStep({
                 )}
               </div>
               <div className="flex gap-2">
-                <button
+                <button type="button"
                   onClick={() => setDocs([...accessibleDocs])}
                   className="font-mono text-xs px-2.5 py-1.5 rounded transition-all"
                   style={{
@@ -271,7 +271,7 @@ export default function DocumentPickerStep({
                 >
                   Semua
                 </button>
-                <button
+                <button type="button"
                   onClick={() => setDocs(["prd"])}
                   className="font-mono text-xs px-2.5 py-1.5 rounded transition-all"
                   style={{
@@ -664,7 +664,7 @@ export default function DocumentPickerStep({
 
       {/* Navigation */}
       <div className="flex gap-4 mt-4">
-        <button
+        <button type="button"
           onClick={onBack}
           className="px-6 py-4 rounded-xl font-inter font-semibold text-base transition-all"
           style={{
@@ -675,7 +675,7 @@ export default function DocumentPickerStep({
         >
           ← Kembali
         </button>
-        <button
+        <button type="button"
           onClick={onNext}
           disabled={value.length === 0}
           className="flex-1 py-4 rounded-xl font-inter font-bold text-base transition-all"
@@ -705,7 +705,7 @@ export default function DocumentPickerStep({
     const minTier = DOCUMENT_DEFINITIONS[key].minTier;
 
     return (
-      <button
+      <button type="button"
         key={key}
         onClick={() => toggle(key)}
         disabled={locked || blockedByLimit}

@@ -69,7 +69,7 @@ export default function DesignStep({ value, onChange, onNext, onBack }: Props) {
             {COLOR_THEMES.map((theme) => {
               const active = value.themeId === theme.id;
               return (
-                <button
+                <button type="button"
                   key={theme.id}
                   onClick={() => set("themeId", theme.id)}
                   className="flex flex-col items-start gap-1.5 p-3 rounded-xl transition-all text-left"
@@ -98,7 +98,7 @@ export default function DesignStep({ value, onChange, onNext, onBack }: Props) {
           </div>
 
           {/* Custom color option */}
-          <button
+          <button type="button"
             onClick={() => set("themeId", "custom")}
             className="flex items-center gap-2 px-3 py-2 rounded-lg font-mono text-xs transition-all mb-3"
             style={{
@@ -189,7 +189,7 @@ export default function DesignStep({ value, onChange, onNext, onBack }: Props) {
             {FONT_PAIRS.map((fp) => {
               const active = value.fontPairId === fp.id;
               return (
-                <button
+                <button type="button"
                   key={fp.id}
                   onClick={() => set("fontPairId", fp.id)}
                   className="flex items-center gap-4 px-4 py-3 rounded-xl text-left transition-all"
@@ -237,7 +237,7 @@ export default function DesignStep({ value, onChange, onNext, onBack }: Props) {
             {VIBES.map((vibe) => {
               const active = value.vibe === vibe;
               return (
-                <button
+                <button type="button"
                   key={vibe}
                   onClick={() => set("vibe", active ? undefined : vibe)}
                   className="font-mono text-xs px-3 py-2 rounded-lg transition-all"
@@ -251,7 +251,7 @@ export default function DesignStep({ value, onChange, onNext, onBack }: Props) {
                 </button>
               );
             })}
-            <button
+            <button type="button"
               onClick={() => set("vibe", undefined)}
               className="font-mono text-xs px-3 py-2 rounded-lg transition-all"
               style={{
@@ -284,7 +284,7 @@ export default function DesignStep({ value, onChange, onNext, onBack }: Props) {
               ).map(({ id, label, desc }) => {
                 const active = value.heroLayout === id;
                 return (
-                  <button
+                  <button type="button"
                     key={id}
                     onClick={() => set("heroLayout", id)}
                     className="flex-1 flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl transition-all"
@@ -335,7 +335,7 @@ export default function DesignStep({ value, onChange, onNext, onBack }: Props) {
               {BG_EFFECTS.map(({ id, label }) => {
                 const active = value.bgEffect === id;
                 return (
-                  <button
+                  <button type="button"
                     key={id}
                     onClick={() => set("bgEffect", id)}
                     className="font-mono text-[11px] px-2.5 py-1.5 rounded-lg transition-all"
@@ -361,7 +361,7 @@ export default function DesignStep({ value, onChange, onNext, onBack }: Props) {
               {BORDER_STYLES.map(({ id, label }) => {
                 const active = value.borderStyle === id;
                 return (
-                  <button
+                  <button type="button"
                     key={id}
                     onClick={() => set("borderStyle", id)}
                     className="font-mono text-[11px] px-2.5 py-1.5 rounded-lg transition-all"
@@ -397,7 +397,7 @@ export default function DesignStep({ value, onChange, onNext, onBack }: Props) {
               ).map(({ key, label, required }) => {
                 const checked = value.sections[key];
                 return (
-                  <button
+                  <button type="button"
                     key={key}
                     onClick={() => !required && setSections(key, !checked)}
                     className="flex items-center gap-2 font-mono text-xs"

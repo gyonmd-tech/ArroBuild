@@ -71,7 +71,7 @@ export default function FAQSection() {
                 borderBottom: "1px solid rgba(255,255,255,0.05)",
               }}
             >
-              <button
+              <button type="button"
                 onClick={() => setOpenIdx(openIdx === i ? null : i)}
                 style={{
                   width: "100%",

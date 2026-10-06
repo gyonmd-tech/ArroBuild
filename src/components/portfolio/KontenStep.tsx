@@ -95,7 +95,7 @@ function SkillInput({
             }}
           >
             {skill}
-            <button
+            <button type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 remove(skill);
@@ -126,7 +126,7 @@ function SkillInput({
       {/* Template shortcuts */}
       {templates.length > 0 && (
         <div className="mt-2">
-          <button
+          <button type="button"
             onClick={() => setShowTemplate((v) => !v)}
             className="font-mono text-[11px] flex items-center gap-1.5 transition-colors"
             style={{ color: "var(--color-text-tertiary)" }}
@@ -137,7 +137,7 @@ function SkillInput({
           {showTemplate && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {templates.map((t) => (
-                <button
+                <button type="button"
                   key={t}
                   onClick={() => add(t)}
                   disabled={skills.includes(t)}
@@ -208,7 +208,7 @@ function ProyekCard({
         </div>
         <div className="flex items-center gap-2">
           {canRemove && (
-            <button
+            <button type="button"
               onClick={(e) => { e.stopPropagation(); onRemove(); }}
               className="font-mono text-[11px] px-2 py-1 rounded transition-all"
               style={{ color: "#EF4444", border: "0.5px solid rgba(239,68,68,0.2)" }}
@@ -261,7 +261,7 @@ function ProyekCard({
             </label>
             <div className="flex flex-wrap gap-1.5">
               {PROYEK_TIPES.map((t) => (
-                <button
+                <button type="button"
                   key={t}
                   onClick={() => onChange({ ...proyek, tipe: proyek.tipe === t ? undefined : t })}
                   className="font-mono text-[11px] px-2.5 py-1 rounded-lg transition-all"
@@ -436,7 +436,7 @@ export default function KontenStep({ profesi, value, onChange, onNext, onBack }:
           </div>
 
           {value.proyek.length < 6 && (
-            <button
+            <button type="button"
               onClick={addProyek}
               className="mt-3 w-full py-2.5 rounded-xl font-mono text-sm transition-all"
               style={{
@@ -519,7 +519,7 @@ export default function KontenStep({ profesi, value, onChange, onNext, onBack }:
                       onBlur={() => setFocusedLayanan("")}
                     />
                   </div>
-                  <button
+                  <button type="button"
                     onClick={() => removeLayanan(l.id)}
                     className="flex-shrink-0 mt-1 opacity-50 hover:opacity-100 transition-opacity"
                     style={{ color: "#EF4444" }}
@@ -529,7 +529,7 @@ export default function KontenStep({ profesi, value, onChange, onNext, onBack }:
                 </div>
               ))}
               {value.layanan.length < 4 && (
-                <button
+                <button type="button"
                   onClick={addLayanan}
                   className="py-2 rounded-xl font-mono text-xs transition-all"
                   style={{ border: "0.5px dashed var(--color-border-strong)", color: "var(--color-text-tertiary)" }}

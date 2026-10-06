@@ -341,7 +341,7 @@ export default function FeatureBuilder({ features, onChange, productType }: Prop
               )}
 
               {/* Priority toggle */}
-              <button
+              <button type="button"
                 onClick={() => togglePriority(f.id)}
                 className="flex-shrink-0 text-[10px] font-semibold px-2.5 py-1 rounded-full transition-all"
                 style={{
@@ -356,7 +356,7 @@ export default function FeatureBuilder({ features, onChange, productType }: Prop
               </button>
 
               {/* Delete */}
-              <button
+              <button type="button"
                 onClick={() => removeFeature(f.id)}
                 className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs
                            opacity-0 group-hover:opacity-100 transition-all"
@@ -399,7 +399,7 @@ export default function FeatureBuilder({ features, onChange, productType }: Prop
             e.currentTarget.style.boxShadow = "none";
           }}
         />
-        <button
+        <button type="button"
           onClick={() => addFeature(newTitle)}
           disabled={!newTitle.trim()}
           className="px-5 py-3 rounded-xl text-sm font-semibold transition-all"

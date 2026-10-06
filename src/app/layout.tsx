@@ -4,6 +4,8 @@ import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Analytics } from "@vercel/analytics/react";
 import { ToastProvider } from "@/components/ui/Toast";
+import { MotionProvider } from "@/components/ui/MotionProvider";
+import { getSiteUrl } from "@/lib/site-url";
 
 const inter = localFont({
   src: "../../node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2",
@@ -30,6 +32,7 @@ const jetbrainsMono = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
   title: "ArroBuild — Satu tempat untuk belajar, planning, dan build dengan AI agent",
   description:
     "Ekosistem developer untuk vibe coders: belajar agent engineering gratis, generate dokumentasi proyek, dan export ke Cursor, Claude Code, Windsurf. 5 model AI.",
@@ -49,12 +52,15 @@ export const metadata: Metadata = {
       "Learn Hub gratis + doc generator + export ke tools favorit kamu. Satu ekosistem untuk developer yang build dengan AI.",
     type: "website",
     siteName: "ArroBuild",
+    locale: "id_ID",
+    images: [{ url: "/og-image.png", width: 1024, height: 1024, alt: "ArroBuild" }],
   },
   twitter: {
     card: "summary_large_image",
     title: "ArroBuild — Belajar, planning, dan build dengan AI agent",
     description:
       "Learn Hub gratis + doc generator + export ke tools favorit kamu.",
+    images: ["/og-image.png"],
   },
   robots: {
     index: true,
@@ -78,10 +84,12 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-full flex flex-col">
-        <ToastProvider>
-          {children}
-          <Analytics />
-        </ToastProvider>
+        <MotionProvider>
+          <ToastProvider>
+            {children}
+            <Analytics />
+          </ToastProvider>
+        </MotionProvider>
       </body>
     </html>
   );
